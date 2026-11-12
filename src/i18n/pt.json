@@ -78,7 +78,7 @@
   "You don't have permission to read %1. To edit it as administrator, run sudoedit in a terminal.": "Não tem permissão para ler %1. Para o editar como administrador, execute sudoedit num terminal.",
   "it belongs to %1": "pertence a %1",
   "it belongs to the %1 group": "pertence ao grupo %1",
-  "it has extended attributes or ACLs": "tem atributos expandidos ou ACL",
+  "it has extended attributes or ACLs": "tem atributos estendidos ou ACL",
   "it has other hard links": "tem outras ligações físicas",
   "it has special permission bits": "tem bits de permissão especiais",
   "its folder isn't writable": "a sua pasta não permite escrita"

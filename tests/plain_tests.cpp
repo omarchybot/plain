@@ -110,6 +110,11 @@ QMap<QString, bool> translatables(const QString &folder, QStringList *problems) 
                 if (!cpp)
                     break;
             }
+            // A text the call builds, like qsTr("Saved " + name), is no literal either.
+            while (at < code.size() && code.at(at).isSpace())
+                ++at;
+            if (isLiteral && at < code.size() && code.at(at) != ',' && code.at(at) != ')')
+                isLiteral = false;
             if (!isLiteral) {
                 *problems << info.fileName() + ": not a literal: " + code.mid(match.capturedStart(), 60);
                 continue;
@@ -1082,6 +1087,17 @@ private slots:
             if (!used.contains(key))
                 problems << "in en.json but no source translates it: " + key;
         QVERIFY2(problems.isEmpty(), qPrintable(problems.join('\n')));
+    }
+
+    void sourceScanRefusesABuiltText() {
+        QTemporaryDir dir;
+        write(dir.filePath("Saved.qml"), "Label { text: qsTr(\"Saved \" + name); tip: qsTr(\"Saved\", \"\", count) }\n");
+        QStringList problems;
+        const QMap<QString, bool> used = translatables(dir.path(), &problems);
+        QCOMPARE(used.keys(), QStringList{"Saved"});
+        QVERIFY(used.value("Saved"));
+        QCOMPARE(problems.size(), 1);
+        QVERIFY2(problems.first().startsWith("Saved.qml: not a literal: qsTr(\"Saved \" + name)"), qPrintable(problems.first()));
     }
 
     void catalogsMatchTheEnglishOne() {

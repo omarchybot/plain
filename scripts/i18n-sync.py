@@ -200,7 +200,7 @@ def translate_batch(batch, code, model, reference):
     categories = PLURALS.get(code, ["one", "other"])
     note = f" {NOTES[code]}" if code in NOTES else ""
     plural = f"""
-Some values are objects of plural forms keyed by CLDR category: return an object with exactly the {name} categories {", ".join(categories)}, each the whole string for counts in that category. "other" keeps every placeholder; another form may drop %Ln only where {name} says that number with a word.
+Some values are objects of plural forms keyed by CLDR category: return an object with exactly the {name} categories {", ".join(categories)}, each the whole string for counts in that category. "other" keeps every placeholder; another form may drop %n only where {name} says that number with a word.
 """ if any(isinstance(value, dict) for value in batch.values()) else ""
     terms = f"""
 Existing {name} translations, for consistent terms (do not return these):
@@ -208,7 +208,7 @@ Existing {name} translations, for consistent terms (do not return these):
 {json.dumps(reference, ensure_ascii=False)}
 </reference>
 """ if reference else ""
-    prompt = f"""Translate these strings of a desktop PDF signing app's interface from English into {name} ({code}).{note}
+    prompt = f"""Translate these strings of a desktop text editor's interface from English into {name} ({code}).{note}
 Return ONLY a JSON object mapping each input key to its translation, with exactly the same keys.
 {BRIEF}
 {plural}{terms}<input>
@@ -230,7 +230,7 @@ def cmd_translate(args):
     write_translations(code, catalog)
     failed = 0
     # One batch at a time, each seeing what the earlier ones chose, so a
-    # term like "seal" comes out the same throughout.
+    # term like "overwrite" comes out the same throughout.
     for start in range(0, len(pending), BATCH):
         batch = {key: source[key] for key in pending[start:start + BATCH]}
         reference = {key: catalog[key] for key in list(catalog)[-REFERENCE:]}
