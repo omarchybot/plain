@@ -441,6 +441,26 @@ private slots:
         QCOMPARE(mode(path), 02755);
     }
 
+    void unlocksWhenTheFileBecomesWritable()
+    {
+        if (::geteuid() == 0)
+            QSKIP("root can write anything");
+        QTemporaryDir dir;
+        const QString path = dir.filePath("a.conf");
+        write(path, "a = 1\n");
+        QFile::setPermissions(path, QFile::ReadOwner);
+        QTextDocument text;
+        Document doc;
+        doc.attachDocument(&text);
+        QVERIFY(doc.open(path));
+        QVERIFY(doc.locked());
+
+        QFile::setPermissions(path, QFile::ReadOwner | QFile::WriteOwner);
+        QTRY_VERIFY(!doc.locked());
+        QVERIFY(doc.editable());
+        QCOMPARE(doc.problem(), QString("None"));
+    }
+
     void reportsFilesItCantWrite()
     {
         if (::geteuid() == 0)

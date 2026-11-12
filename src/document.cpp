@@ -593,6 +593,15 @@ void Document::diskChanged() {
     watch();
     if (m_path.isEmpty() || m_target.isEmpty())
         return;
+    // Permissions aren't in the stamp, so a file made writable (chmod, chown)
+    // is noticed here, and the editor unlocks without reopening it.
+    if (m_locked && writable(QFileInfo::exists(m_target) ? m_target : QFileInfo(m_target).absolutePath())) {
+        m_locked = false;
+        m_editable = true;
+        if (m_problem == Problem::NotWritable)
+            setProblem(Problem::None);
+        emit fileChanged();
+    }
     const QString target = currentTarget();
     const QByteArray now = stamp(target);
     if (target == m_target && now == m_diskStamp)
