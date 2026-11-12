@@ -20,6 +20,13 @@
 static const char *Usage = "usage: plain [+LINE] [--] [FILE]\n";
 
 int main(int argc, char *argv[]) {
+    // Without a display Qt aborts in the constructor, before --help or
+    // --version can answer; offscreen lets them, and the window is refused below.
+    const bool headless = qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM") && qEnvironmentVariableIsEmpty("WAYLAND_DISPLAY")
+                       && qEnvironmentVariableIsEmpty("DISPLAY");
+    if (headless)
+        qputenv("QT_QPA_PLATFORM", "offscreen");
+
     QGuiApplication app(argc, argv);
     app.setApplicationName("plain");
     app.setApplicationVersion("0.2.0");
@@ -35,6 +42,10 @@ int main(int argc, char *argv[]) {
     }
     if (!arguments.error.isEmpty()) {
         fprintf(stderr, "plain: %s\n%s", qPrintable(arguments.error), Usage);
+        return 1;
+    }
+    if (headless && app.platformName() == "offscreen") {
+        fputs("plain: no display to open a window on\n", stderr);
         return 1;
     }
 
