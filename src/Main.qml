@@ -211,14 +211,22 @@ ApplicationWindow {
         focus: true
         padding: 22
         onOpened: saveButton.forceActiveFocus()
-        onClosed: if (win.pendingAction.length > 0 && !choosing) { win.pendingAction = ""; editor.focusText() }
+        // Closed by Escape or a click outside, rather than a choice: nothing
+        // waits any more. A choice is only cleared here, since the popup
+        // finishes closing after the choice's own work has started.
+        onClosed: {
+            if (win.pendingAction.length > 0 && !choosing) {
+                win.pendingAction = ""
+                editor.focusText()
+            }
+            choosing = false
+        }
         property bool choosing: false
         Overlay.modal: Rectangle { color: Qt.rgba(0, 0, 0, 0.55) }
 
         function choose(choice) {
             choosing = true
             close()
-            choosing = false
             if (choice === "save") {
                 // A failed save leaves the banner up and the window open.
                 win.save()
