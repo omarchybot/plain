@@ -500,6 +500,22 @@ private slots:
         doc.attach(edit.get());
         QVERIFY(doc.open(dir.filePath("long.conf")));
         QVERIFY(edit->flags() & QQuickItem::ItemObservesViewport);
+
+        // A reload replaces the text undoably, past the text property.
+        write(dir.filePath("grows.conf"), "a = 1\n");
+        QVERIFY(doc.open(dir.filePath("grows.conf")));
+        QVERIFY(!(edit->flags() & QQuickItem::ItemObservesViewport));
+        write(dir.filePath("grows.conf"), lines);
+        doc.reload();
+        QCOMPARE(edit->property("text").toString().size(), lines.size());
+        QVERIFY(edit->flags() & QQuickItem::ItemObservesViewport);
+
+        // Shrinking it keeps the flag, since undo brings the long text back.
+        write(dir.filePath("grows.conf"), "a = 1\n");
+        doc.reload();
+        undo(edit.get());
+        QCOMPARE(edit->property("text").toString().size(), lines.size());
+        QVERIFY(edit->flags() & QQuickItem::ItemObservesViewport);
     }
 
     void createsNewFiles()
@@ -545,6 +561,47 @@ private slots:
         // Plain's own save doesn't count as news.
         QTest::qWait(250);
         QCOMPARE(doc.problem(), QString("None"));
+    }
+
+    // A file that grows past the limit while open is put aside, and opening
+    // it anyway replaces the text as one undoable step, like any reload.
+    void openAnywayAfterAReloadCanBeUndone()
+    {
+        QTemporaryDir dir;
+        const QString path = dir.filePath("grows.conf");
+        write(path, "a = 1\n");
+        QTextDocument text;
+        Document doc;
+        doc.attachDocument(&text);
+        QVERIFY(doc.open(path));
+
+        replace(path, QByteArray(Document::LargeFileBytes + 1, 'x'));
+        QTRY_COMPARE(doc.problem(), QString("TooLarge"));
+        QCOMPARE(text.toPlainText(), QString("a = 1\n"));
+        append(&text, "mine\n");
+        doc.openAnyway();
+        QCOMPARE(text.characterCount() - 1, Document::LargeFileBytes + 1);
+        text.undo();
+        QCOMPARE(text.toPlainText(), QString("a = 1\nmine\n"));
+    }
+
+    // Reading a FIFO waits for a writer, which would freeze the window.
+    void neverReadsAFifoThatReplacedTheFile()
+    {
+        QTemporaryDir dir;
+        const QString path = dir.filePath("a.conf");
+        write(path, "a = 1\n");
+        QTextDocument text;
+        Document doc;
+        doc.attachDocument(&text);
+        QVERIFY(doc.open(path));
+
+        const QString fifo = dir.filePath("fifo");
+        QVERIFY(::mkfifo(QFile::encodeName(fifo).constData(), 0600) == 0);
+        QVERIFY(::rename(QFile::encodeName(fifo).constData(), QFile::encodeName(path).constData()) == 0);
+        QTRY_COMPARE(doc.problem(), QString("NotRegular"));
+        QCOMPARE(text.toPlainText(), QString("a = 1\n"));
+        QVERIFY(!doc.save());
     }
 
     // Arguments.
@@ -748,6 +805,11 @@ private:
     {
         QFile file(path);
         return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray("<unreadable>");
+    }
+
+    static void undo(QQuickItem *edit)
+    {
+        edit->property("textDocument").value<QQuickTextDocument *>()->textDocument()->undo();
     }
 
     static void append(QTextDocument *document, const QString &text)

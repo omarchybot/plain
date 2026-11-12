@@ -17,6 +17,7 @@
 #include <QTextDocument>
 #include <QUrl>
 
+#include <fcntl.h>
 #include <grp.h>
 #include <pwd.h>
 #include <sys/stat.h>
@@ -26,10 +27,20 @@
 namespace {
 const QByteArray Bom("\xEF\xBB\xBF");
 
+// Only regular files. Opened without blocking and checked once open, since
+// opening a FIFO for reading waits for a writer, and the path can be swapped
+// for one between a check and the open.
 bool readFile(const QString &path, QByteArray *bytes) {
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly))
+    const int fd = ::open(QFile::encodeName(path).constData(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+    if (fd < 0)
         return false;
+    struct stat st;
+    QFile file;
+    if (::fstat(fd, &st) != 0 || !S_ISREG(st.st_mode)
+        || !file.open(fd, QIODevice::ReadOnly, QFileDevice::AutoCloseHandle)) {
+        ::close(fd);
+        return false;
+    }
     *bytes = file.readAll();
     return file.error() == QFile::NoError;
 }
@@ -212,9 +223,11 @@ bool Document::open(const QString &path) {
     return load(false);
 }
 
+// After a reload refused the file, the editor still holds the text and its
+// undo history, so opening it anyway is an undoable reload too.
 void Document::openAnyway() {
     m_allowLarge = true;
-    load(false);
+    load(!m_target.isEmpty());
 }
 
 void Document::reload() {
@@ -248,6 +261,11 @@ void Document::setText(const QString &text, bool undoably) {
         cursor.select(QTextCursor::Document);
         cursor.insertText(text);
         cursor.endEditBlock();
+        // Only the text property turns on drawing just the visible lines, past
+        // Qt's 10,000 characters. Never turned off here, since undo can bring
+        // the long text back without it.
+        if (m_textEdit && text.size() > 10000)
+            m_textEdit->setFlag(QQuickItem::ItemObservesViewport);
     } else if (m_textEdit) {
         m_textEdit->setProperty("text", text);
     } else {
@@ -582,6 +600,16 @@ void Document::diskChanged() {
     if (now.isEmpty()) {
         if (!m_diskHash.isEmpty())
             setProblem(Problem::DeletedOnDisk, displayPath());
+        return;
+    }
+    // What load() would refuse before reading isn't read here either; a reload
+    // refuses it and says why.
+    const QFileInfo info(target);
+    if (!info.isFile() || (!m_allowLarge && info.size() > LargeFileBytes)) {
+        if (!modified() && target == m_target)
+            load(true);
+        else
+            setProblem(Problem::ChangedOnDisk, displayPath());
         return;
     }
     QByteArray bytes;
