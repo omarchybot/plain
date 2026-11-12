@@ -671,6 +671,13 @@ private slots:
         document.setPlainText(longLine + "\n\"k\": 1");
         QVERIFY(document.firstBlock().layout()->formats().isEmpty());
         QVERIFY(!document.lastBlock().layout()->formats().isEmpty());
+
+        // A long line that closes a block comment still closes it.
+        highlighter.setLanguage("css");
+        document.setPlainText("/* open\n" + QString(Highlighter::LongLine, 'x') + " */\na: 1;");
+        const auto formats = document.lastBlock().layout()->formats();
+        QVERIFY(!formats.isEmpty());
+        QVERIFY(!formats.first().format.fontItalic()); // a key, not a comment
     }
 
     void highlightsDataFormats()

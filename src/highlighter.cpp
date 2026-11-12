@@ -391,9 +391,12 @@ void Highlighter::highlight(int from, int to) {
         QList<QTextLayout::FormatRange> ranges;
         int next = none ? 0 : state;
         const QString text = block.text();
-        if (!none && text.size() <= LongLine)
+        // A long line is still scanned, uncolored, so a comment or string it
+        // opens or closes is carried to the lines after it.
+        if (!none)
             next = scan(language, text, state, [&](qsizetype at, qsizetype length, Token token) {
-                ranges.append({int(at), int(length), m_formats[token]});
+                if (text.size() <= LongLine)
+                    ranges.append({int(at), int(length), m_formats[token]});
             });
         const int previousNext = block.userState();
         block.layout()->setFormats(ranges);
