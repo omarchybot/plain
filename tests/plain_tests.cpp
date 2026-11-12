@@ -1,5 +1,6 @@
 #include <QDir>
 #include <QFile>
+#include <QGuiApplication>
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QQuickItem>
@@ -813,7 +814,51 @@ private slots:
         QVERIFY(translator.translate("Main", "Save").isNull());
     }
 
+    // 21 is "one" in Russian but plural in English, so the find bar's English
+    // fallback must count by English rules, not show "21 match".
+    void translatorCountsAFallbackByItsOwnLanguage()
+    {
+        LocaleGuard guard;
+        QTemporaryDir dir;
+        write(dir.path() + "/language", "ru\n");
+        write(dir.path() + "/en.json", R"({"%n matches": {"one": "%n match", "other": "%n matches"}})");
+        write(dir.path() + "/ru.json",
+              R"({"%n files": {"one": "%n файл", "few": "%n файла", "many": "%n файлов", "other": "%n файла"}})");
+        Translator translator(dir.path() + "/language", dir.path());
+        QCOMPARE(translator.translate("Main", "%n files", nullptr, 21), QString("%n файл"));
+        QCOMPARE(translator.translate("Main", "%n files", nullptr, 25), QString("%n файлов"));
+        QCOMPARE(translator.translate("FindBar", "%n matches", nullptr, 21), QString("%n matches"));
+        QCOMPARE(translator.translate("FindBar", "%n matches", nullptr, 1), QString("%n match"));
+    }
+
+    // A first language pick can create ~/.config/omarchy itself.
+    void translatorFollowsAFirstPickThatCreatesItsDirectory()
+    {
+        LocaleGuard guard;
+        QTemporaryDir dir;
+        write(dir.path() + "/da.json", R"({"Save": "Gem"})");
+        const QString language = dir.path() + "/config/omarchy/language";
+        Translator translator(language, dir.path());
+        QCOMPARE(translator.language(), QString("en"));
+
+        QVERIFY(QDir().mkpath(QFileInfo(language).absolutePath()));
+        write(language, "da\n");
+        QTRY_COMPARE(translator.language(), QString("da"));
+        QCOMPARE(translator.translate("Main", "Save"), QString("Gem"));
+    }
+
 private:
+    // A Translator sets the app's default locale and layout direction.
+    struct LocaleGuard {
+        QLocale locale;
+        Qt::LayoutDirection direction = QGuiApplication::layoutDirection();
+        ~LocaleGuard()
+        {
+            QLocale::setDefault(locale);
+            QGuiApplication::setLayoutDirection(direction);
+        }
+    };
+
     static void write(const QString &path, const QByteArray &contents)
     {
         QFile file(path);
