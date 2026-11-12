@@ -446,7 +446,10 @@ void Document::dismissProblem() {
 // replaces it without asking again: in place when a rename would lose
 // something. The window takes on the new file only once it's written.
 bool Document::saveAsUrl(const QUrl &url) {
-    if (!url.isLocalFile() || !m_document)
+    // A file Plain refused to open left the editor empty, not holding it, so
+    // saving that would replace whatever the user picks (by default the
+    // refused file itself) with nothing.
+    if (!url.isLocalFile() || !m_document || (!m_editable && !m_locked))
         return false;
     const QString path = QFileInfo(url.toLocalFile()).absoluteFilePath();
     const QFileInfo info(path);

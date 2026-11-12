@@ -61,6 +61,8 @@ ApplicationWindow {
     }
 
     function saveAs() {
+        if (!doc.editable && !doc.locked)
+            return
         Qt.inputMethod.commit()
         picker.saveFile(doc.path)
     }

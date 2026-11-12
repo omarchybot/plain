@@ -369,6 +369,32 @@ private slots:
         QFile::setPermissions(dir.filePath("sealed"), QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner);
     }
 
+    // A refused file leaves the editor empty; Save As over it, which the
+    // dialog suggests, would truncate it.
+    void saveAsNeedsAFileToSave()
+    {
+        QTemporaryDir dir;
+        const QString binary = dir.filePath("binary");
+        write(binary, QByteArray("\x7F" "ELF\0\0", 6));
+        QTextDocument text;
+        Document doc;
+        doc.attachDocument(&text);
+        QVERIFY(!doc.open(binary));
+        QVERIFY(!doc.saveAsUrl(QUrl::fromLocalFile(binary)));
+        QCOMPARE(read(binary), QByteArray("\x7F" "ELF\0\0", 6));
+
+        if (::geteuid() == 0)
+            return;
+        // A file the user can't write is loaded, and Save As is its way out.
+        const QString locked = dir.filePath("locked.conf"), copy = dir.filePath("copy.conf");
+        write(locked, "a = 1\n");
+        QFile::setPermissions(locked, QFile::ReadOwner);
+        QVERIFY(doc.open(locked));
+        QVERIFY(doc.locked());
+        QVERIFY(doc.saveAsUrl(QUrl::fromLocalFile(copy)));
+        QCOMPARE(read(copy), QByteArray("a = 1\n"));
+    }
+
     // A rename would hand the file to the user's own group.
     void asksBeforeChangingTheGroup()
     {
